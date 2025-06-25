@@ -1,0 +1,40 @@
+{
+  "$schema": "https://aka.ms/azure-bicep-env-schema",
+  
+  // ────────────────────────────────
+  // Environment‑scoped variables
+  // Swap the root key (dev/int/prod) via the
+  // `environment` parameter in main.bicep or in your
+  // deployment pipeline.
+  // ────────────────────────────────
+
+  "dev": {
+    "subscriptionId": "00000000-0000-0000-0000-000000000000",
+    "location": "eastus",
+    "namePrefix": "mypj‑dev",
+    "administratorLogin": "sqladmin",
+    "administratorPassword": "<secure‑param‑or‑keyvault‑ref>",
+    "agentCount": 2,
+    "k8sVersion": "1.29"
+  },
+
+  "int": {
+    "subscriptionId": "11111111-1111-1111-1111-111111111111",
+    "location": "eastus2",
+    "namePrefix": "mypj‑int",
+    "administratorLogin": "sqladmin",
+    "administratorPassword": "<secure‑param‑or‑keyvault‑ref>",
+    "agentCount": 3,
+    "k8sVersion": "1.29"
+  },
+
+  "prod": {
+    "subscriptionId": "22222222-2222-2222-2222-222222222222",
+    "location": "centralus",
+    "namePrefix": "mypj",
+    "administratorLogin": "sqladmin",
+    "administratorPassword": "<secure‑param‑or‑keyvault‑ref>",
+    "agentCount": 5,
+    "k8sVersion": "1.29"
+  }
+}
