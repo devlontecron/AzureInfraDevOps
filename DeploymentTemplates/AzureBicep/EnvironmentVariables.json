@@ -1,12 +1,5 @@
 {
   "$schema": "https://aka.ms/azure-bicep-env-schema",
-  
-  // ────────────────────────────────
-  // Environment‑scoped variables
-  // Swap the root key (dev/int/prod) via the
-  // `environment` parameter in main.bicep or in your
-  // deployment pipeline.
-  // ────────────────────────────────
 
   "dev": {
     "subscriptionId": "00000000-0000-0000-0000-000000000000",

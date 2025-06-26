@@ -1,0 +1,64 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+  branches:
+    include:
+      - main
+
+parameters:
+  - name: buildConfiguration
+    type: string
+    default: Release
+
+variables:
+  azureServiceConnection: 'AzureSPN'
+  bicepOutputDir: '$(Build.ArtifactStagingDirectory)/arm'
+
+stages:
+- stage: Build
+  displayName: 'Build & Package'
+  jobs:
+  - job: build
+    displayName: 'Compile code and Bicep'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - checkout: self
+
+    - task: DotNetCoreCLI@2
+      displayName: 'dotnet build'
+      inputs:
+        command: 'build'
+        arguments: '--configuration ${{ parameters.buildConfiguration }}'
+        projects: '**/*.csproj'
+
+    - task: AzureCLI@2
+      displayName: 'Compile Bicep ➜ ARM'
+      inputs:
+        azureSubscription: $(azureServiceConnection)
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -e
+          mkdir -p $(bicepOutputDir)
+          echo "##vso[task.setvariable variable=ARM_TEMPLATE_PATH]$(bicepOutputDir)/main.json"
+          az bicep version
+          az bicep build --file main.bicep --outfile $(ARM_TEMPLATE_PATH)
+
+    - publish: $(bicepOutputDir)
+      artifact: arm
+      displayName: 'Publish ARM templates'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'dotnet publish'
+      inputs:
+        command: 'publish'
+        publishWebProjects: true
+        arguments: '--configuration ${{ parameters.buildConfiguration }} --output $(Build.ArtifactStagingDirectory)/app'
+
+    - publish: $(Build.ArtifactStagingDirectory)/app
+      artifact: app
+      displayName: 'Publish application binaries'

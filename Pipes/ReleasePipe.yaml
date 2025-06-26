@@ -1,0 +1,114 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger: none   # this pipeline is triggered by resources below
+
+resources:
+  pipelines:
+    - pipeline: build
+      source: azure-pipelines-build   # build pipeline name/Azure DevOps ID
+      trigger:
+        branches:
+          include:
+            - main
+
+parameters:
+  - name: environment
+    type: string
+    default: dev
+    values:
+      - dev
+      - int
+      - prod
+
+variables:
+  azureServiceConnection: 'AzureSPN'
+  resourceGroupName: '$(System.TeamProject)-rg-${{ parameters.environment }}'
+
+stages:
+# ───────────────────────────────────────────────────────────────────
+# Deploy stage – infra + app
+# ───────────────────────────────────────────────────────────────────
+- stage: Deploy
+  displayName: 'Deploy ${{ parameters.environment }}'
+  jobs:
+  - deployment: deploy
+    displayName: 'ARM Deploy & App Deploy'
+    environment: ${{ parameters.environment }}   # add approvals/checks here
+    strategy:
+      runOnce:
+        deploy:
+          pool:
+            vmImage: 'ubuntu-latest'
+          steps:
+          # Download artifacts from build pipeline
+          - download: build
+            artifact: arm
+          - download: build
+            artifact: app
+
+          # Derive subscription / region from environments.json
+          - task: AzureCLI@2
+            displayName: 'Deploy ARM template'
+            inputs:
+              azureSubscription: $(azureServiceConnection)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -e
+                envFile="$(System.DefaultWorkingDirectory)/build/arm/environments.json"
+                SUB=$(jq -r '.${{ parameters.environment }}.subscriptionId' "$envFile")
+                LOCATION=$(jq -r '.${{ parameters.environment }}.location' "$envFile")
+                PREFIX=$(jq -r '.${{ parameters.environment }}.namePrefix' "$envFile")
+
+                echo "Setting subscription $SUB"
+                az account set --subscription "$SUB"
+
+                echo "Ensuring RG $(resourceGroupName) in $LOCATION"
+                az group create -n $(resourceGroupName) -l "$LOCATION" --output none
+
+                echo "Deploying ARM template…"
+                az deployment group create \
+                  --resource-group $(resourceGroupName) \
+                  --template-file $(System.DefaultWorkingDirectory)/build/arm/main.json \
+                  --parameters environment=${{ parameters.environment }} \
+                  --output table
+
+          # Deploy binaries to Azure Web App (example)
+          - task: AzureWebApp@1
+            displayName: 'Deploy Web App'
+            inputs:
+              azureSubscription: $(azureServiceConnection)
+              appType: 'webAppLinux'
+              appName: '$(PREFIX)-web-${{ parameters.environment }}'
+              package: $(Pipeline.Workspace)/build/app
+
+# ───────────────────────────────────────────────────────────────────
+# Test stage – simple smoke tests
+# ───────────────────────────────────────────────────────────────────
+- stage: Test
+  displayName: 'Smoke Tests ${{ parameters.environment }}'
+  dependsOn: Deploy
+  condition: succeeded('Deploy')
+  jobs:
+  - job: smoke
+    displayName: 'HTTP health check'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: Bash@3
+      displayName: 'Invoke health endpoint'
+      inputs:
+        targetType: 'inline'
+        script: |
+          set -e
+          echo "Waiting for app to warm up…"
+          sleep 30
+          RESPONSE=$(curl -sk -o /dev/null -w "%{http_code}" https://$(PREFIX)-web-${{ parameters.environment }}.azurewebsites.net/health)
+          if [ "$RESPONSE" != "200" ]; then
+            echo "Health check failed with HTTP $RESPONSE" >&2
+            exit 1
+          fi
+          echo "Health check passed (HTTP 200)"

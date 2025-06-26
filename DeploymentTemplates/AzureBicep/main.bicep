@@ -1,20 +1,20 @@
-@allowed([ 'dev' 'int' 'prod' ])
+@allowed([ 'dev', 'int', 'prod' ])
 param environment string = 'dev'
 
 // Load the block that matches the selected env
-var env = json(loadTextContent('environments.json'))[environment]
+var env = json(loadTextContent('./environmentVariables.json'))[environment]
 
 // Map to your existing params
-param namePrefix string                 = env.namePrefix
-param location   string                 = env.location
-param agentCount int                    = env.agentCount
-param k8sVersion string                 = env.k8sVersion
+param namePrefix string = env.namePrefix
+param location   string = env.location
+param agentCount int = env.agentCount
+param k8sVersion string = env.k8sVersion
 @secure()
-param administratorPassword string      = env.administratorPassword
+param administratorPassword string = env.administratorPassword
 
 
 // -------------------- Front Door --------------------
-module afd 'modules/azureFrontDoor.bicep' = {
+module afd 'modules/azFD.bicep' = {
   name: '${namePrefix}-afd-m'
   params: {
     name: '${namePrefix}-afd'
@@ -23,7 +23,7 @@ module afd 'modules/azureFrontDoor.bicep' = {
 }
 
 // -------------------- API Management ----------------
-module apim 'modules/apiManagement.bicep' = {
+module apim 'modules/apiManag.bicep' = {
   name: '${namePrefix}-apim-m'
   params: {
     name: '${namePrefix}-apim'
@@ -35,7 +35,7 @@ module apim 'modules/apiManagement.bicep' = {
 }
 
 // -------------------- Application Gateway -----------
-module appGw 'modules/appGateway.bicep' = {
+module appGw 'modules/apiGate.bicep' = {
   name: '${namePrefix}-appgw-m'
   params: {
     name: '${namePrefix}-agw'
@@ -55,7 +55,7 @@ module aks 'modules/aksCluster.bicep' = {
 }
 
 // -------------------- Key Vault ---------------------
-module kv 'modules/keyVault.bicep' = {
+module kv 'modules/kv.bicep' = {
   name: '${namePrefix}-kv-m'
   params: {
     name: '${namePrefix}-kv'
@@ -64,17 +64,19 @@ module kv 'modules/keyVault.bicep' = {
 }
 
 // -------------------- Azure SQL ---------------------
-module sql 'modules/sqlDatabase.bicep' = {
+module sql 'modules/sql.bicep' = {
   name: '${namePrefix}-sql-m'
   params: {
     namePrefix: namePrefix
     location: location
+    administratorLogin: 'sqladmin'
+    administratorPassword: administratorPassword
   }
   dependsOn: [ aks ]
 }
 
 // -------------------- Storage (Blob) ----------------
-module storage 'modules/storage.bicep' = {
+module storage 'modules/blob.bicep' = {
   name: '${namePrefix}-st-m'
   params: {
     name: '${namePrefix}st'
@@ -84,7 +86,7 @@ module storage 'modules/storage.bicep' = {
 }
 
 // -------------------- Redis Cache -------------------
-module redis 'modules/redisCache.bicep' = {
+module redis 'modules/redis.bicep' = {
   name: '${namePrefix}-redis-m'
   params: {
     name: '${namePrefix}-redis'
